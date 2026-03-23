@@ -1,27 +1,38 @@
-# 基础镜像：PHP7.4+Apache ARM64 原生支持
-FROM php:7.4-apache
+# 选择兼容性更好的基础镜像（Debian 11，适配QEMU）
+FROM php:7.4-apache-bullseye
 
-# 工作目录
-WORKDIR /var/www/html
+# 解决QEMU交互/时区问题 + 国内源加速
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Asia/Shanghai \
+    APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
 
-# 安装依赖 + PHP扩展（修复了语法错误）
+# 替换阿里云源（解决apt-get update失败）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
+
+# 安装依赖（仅保留必要包，移除无效的openssl扩展编译）
 RUN apt-get update && \
+    # 安装基础依赖（libonig-dev是mbstring必需的）
     apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev \
-        libssl-dev \
-        libonig-dev && \
-    docker-php-ext-install curl openssl mbstring && \
+        libonig-dev \
+        && \
+    # 仅编译安装有效扩展（curl + mbstring，openssl内置）
+    docker-php-ext-install -j$(nproc) curl mbstring && \
+    # 启用Apache重写模块
     a2enmod rewrite && \
+    # 清理缓存（减小镜像体积）
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# 复制代码
-COPY login.php /var/www/html/
+# 恢复默认交互配置
+ENV DEBIAN_FRONTEND=dialog
 
-# 权限
+# 工作目录 + 权限配置（适配Apache运行用户）
+WORKDIR /var/www/html
 RUN chown -R www-data:www-data /var/www/html && \
-    chmod 755 /var/www/html/login.php
+    chmod 755 /var/www/html
 
+# 暴露端口 + 启动命令
 EXPOSE 80
-
 CMD ["apache2-foreground"]
