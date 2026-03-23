@@ -18,8 +18,10 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     a2enmod rewrite && \
     # 修改Apache监听端口为5702
     sed -i 's/Listen 80/Listen 5702/g' /etc/apache2/ports.conf && \
-    # 核心修复：直接在默认虚拟主机配置中添加目录权限（最稳定）
+    # 核心1：添加目录权限配置（解决403）
     sed -i '/DocumentRoot \/var\/www\/html/a \ \ \ \ <Directory \/var\/www\/html>\n \ \ \ \ \ \ Options Indexes FollowSymLinks\n \ \ \ \ \ \ AllowOverride All\n \ \ \ \ \ \ Require all granted\n \ \ \ \ <\/Directory>' /etc/apache2/sites-available/000-default.conf && \
+    # 核心2：设置login.php为Apache默认首页（解决目录索引）
+    sed -i '/<Directory \/var\/www\/html>/a \ \ \ \ \ \ DirectoryIndex login.php index.php index.html' /etc/apache2/sites-available/000-default.conf && \
     # 修改虚拟主机端口为5702
     sed -i 's/:80/:5702/g' /etc/apache2/sites-available/000-default.conf && \
     # 清理缓存
