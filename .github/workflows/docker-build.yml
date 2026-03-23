@@ -40,7 +40,7 @@ jobs:
           # 优先构建原生架构，避免QEMU兼容问题
           platforms: linux/amd64,linux/arm64/v8
           push: true
-          tags: 你的用户名/你的镜像名:latest
+          tags: twh808/unicom-login:latest
           # 关键：禁用缓存验证，解决QEMU下的缓存冲突
           no-cache: true
           # 输出详细日志，方便排查
