@@ -1,47 +1,40 @@
-# 选择兼容性更好的基础镜像（Debian 11，适配QEMU）
+# 基础镜像
 FROM php:7.4-apache-bullseye
-# 解决QEMU交互/时区问题 + 国内源加速
+
+# 环境变量
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \
     APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
-# 替换阿里云源（解决apt-get update失败）
+
+# 第一步：替换源 + 安装依赖 + 配置Apache（整合成无断裂的RUN块）
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
-    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list
-# 安装依赖（仅保留必要包，移除无效的openssl扩展编译）
-RUN apt-get update && \
-    # 安装基础依赖（libonig-dev是mbstring必需的）
-    apt-get install -y --no-install-recommends \
-        libcurl4-openssl-dev \
-        libonig-dev \
-        && \
-    # 仅编译安装有效扩展（curl + mbstring，openssl内置）
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends libcurl4-openssl-dev libonig-dev && \
     docker-php-ext-install -j$(nproc) curl mbstring && \
-    # 启用Apache重写模块
     a2enmod rewrite && \
-    # 关键：修改Apache默认监听端口为5702
     sed -i 's/Listen 80/Listen 5702/g' /etc/apache2/ports.conf && \
     sed -i 's/:80/:5702/g' /etc/apache2/sites-available/000-default.conf && \
-    # 【修复核心】用cat写入配置文件，且语法格式正确
-    cat > /etc/apache2/conf-available/000-directory.conf << 'EOF'
-<Directory /var/www/html>
-    Options Indexes FollowSymLinks
-    AllowOverride All
-    Require all granted
-</Directory>
-EOF
-    && a2enconf 000-directory.conf && \
-    # 清理缓存（减小镜像体积）
+    # 直接用echo单行写入配置（彻底避免EOF换行问题）
+    echo '<Directory /var/www/html> Options Indexes FollowSymLinks AllowOverride All Require all granted </Directory>' > /etc/apache2/conf-available/000-directory.conf && \
+    a2enconf 000-directory.conf && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-# 恢复默认交互配置
+
+# 恢复交互配置
 ENV DEBIAN_FRONTEND=dialog
+
 # 工作目录
 WORKDIR /var/www/html
-# 【关键】将本地login.php拷贝到镜像的Apache根目录
+
+# 拷贝代码
 COPY login.php /var/www/html/
-# 【优化】递归修改目录+文件权限，确保www-data完全拥有
-RUN chown -R www-data:www-data /var/www/html && \
-    chmod -R 755 /var/www/html
-# 暴露端口改为5702 + 保持原有启动命令
+
+# 设置权限
+RUN chown -R www-data:www-data /var/www/html && chmod -R 755 /var/www/html
+
+# 暴露端口
 EXPOSE 5702
+
+# 启动命令
 CMD ["apache2-foreground"]
