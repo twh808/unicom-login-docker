@@ -21,8 +21,7 @@ RUN apt-get update && \
     # 关键：修改Apache默认监听端口为5702
     sed -i 's/Listen 80/Listen 5702/g' /etc/apache2/ports.conf && \
     sed -i 's/:80/:5702/g' /etc/apache2/sites-available/000-default.conf && \
-    # 【修复核心】用cat写入配置文件，避免换行符解析异常
-    # 这种方式能保证标签正确闭合，解决</Directory>匹配问题
+    # 【修复核心】用cat写入配置文件，且语法格式正确
     cat > /etc/apache2/conf-available/000-directory.conf << 'EOF'
 <Directory /var/www/html>
     Options Indexes FollowSymLinks
@@ -30,8 +29,7 @@ RUN apt-get update && \
     Require all granted
 </Directory>
 EOF
-    && \
-    a2enconf 000-directory.conf && \
+    && a2enconf 000-directory.conf && \
     # 清理缓存（减小镜像体积）
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
