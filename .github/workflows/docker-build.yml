@@ -1,43 +1,48 @@
-# 工作流名称，随便填
-name: Build Unicom Login ARM64 Docker Image
-# 触发条件：推送到main分支时自动构建 + 支持手动触发
+name: Build and Push Docker Image
+
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch: # 手动触发
 
-# 构建任务
 jobs:
-  build-and-push:
-    # 运行环境：GitHub官方的Ubuntu服务器
+  build:
     runs-on: ubuntu-latest
     steps:
-      # 步骤1：拉取GitHub仓库的所有代码到服务器
-      - name: Checkout Code
+      # 1. 检出代码
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # 步骤2：配置Docker多架构构建工具（关键，支持ARM64）
+      # 2. 初始化QEMU（解决跨架构模拟问题）
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 3. 设置BuildX（指定兼容模式）
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            env.BUILDKIT_STEP_LOG_MAX_SIZE=10485760
 
-      # 步骤3：登录Docker Hub（使用后续配置的密钥）
+      # 4. 登录Docker Hub（如果需要推送）
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 步骤4：构建ARM64镜像并推送到Docker Hub
-      - name: Build and Push ARM64 Image
+      # 5. 构建并推送（禁用缓存验证，适配QEMU）
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          # 构建上下文：仓库根目录
           context: .
-          # Dockerfile路径：仓库根目录的Dockerfile
           file: ./Dockerfile
-          # 仅构建ARM64/v8架构（核心，适配ARM设备）
-          platforms: linux/arm64/v8
-          # 开启推送：推送到Docker Hub
+          # 优先构建原生架构，避免QEMU兼容问题
+          platforms: linux/amd64,linux/arm64/v8
           push: true
-          # 镜像标签：DockerHub用户名/仓库名:最新版（后续改自己的DockerHub用户名）
-          tags: twh808/unicom-login:latest
+          tags: 你的用户名/你的镜像名:latest
+          # 关键：禁用缓存验证，解决QEMU下的缓存冲突
+          no-cache: true
+          # 输出详细日志，方便排查
+          provenance: false
+          sbom: false
